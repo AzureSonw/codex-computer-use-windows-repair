@@ -1,0 +1,34 @@
+# Codex workspace metadata
+.agents/
+.codex/
+
+# Local recovery and test artifacts
+outputs/
+work/
+recovered/
+repair-simulation*/
+cua_node/
+openai-bundled/
+runtimes/
+plugins/cache/
+node_modules/
+
+# Personal configuration, backups, and logs
+config.toml
+config.toml.before-*
+*.before-computer-use-repair-*
+.staging-*
+*.log
+
+# Never redistribute recovered runtime binaries
+*.exe
+*.dll
+*.node
+*.asar
+
+# OS/editor files
+Thumbs.db
+Desktop.ini
+.DS_Store
+.idea/
+.vscode/
