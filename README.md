@@ -7,6 +7,8 @@
 
 本仓库只包含可审阅的 PowerShell 脚本和 CMD 启动器，不包含、分发或重新打包任何 OpenAI 二进制文件、插件源码、缓存或用户配置。
 
+当前稳定版为 **v1.0.0**。普通用户请从 GitHub Releases 下载单个 ZIP 包；仓库根目录保留原始脚本，方便审阅。
+
 ## 适用症状
 
 - Computer Use、Browser 或 Chrome 插件显示不可用。
@@ -36,13 +38,20 @@
 
 ## 使用方法
 
-1. 下载下列两个文件并放在同一个目录：
-   - `repair-codex-computer-use.ps1`
-   - `运行-Codex-Computer-Use-修复.cmd`
-2. 完全退出 Codex。
-3. 双击 `运行-Codex-Computer-Use-修复.cmd`。
-4. 等待窗口显示 `Repair completed successfully.`。
-5. 重新打开 Codex，并新建一个任务测试 Computer Use。
+1. 在仓库的 [Releases](https://github.com/AzureSonw/codex-computer-use-windows-repair/releases) 页面下载 `Codex-Computer-Use-Repair-v1.0.0.zip`。
+2. 解压 ZIP；不要直接在压缩包预览窗口中运行文件。
+3. 完全退出 Codex。
+4. 双击 `Run-Codex-Computer-Use-Repair.cmd`。
+5. 等待窗口显示 `Repair completed successfully.`。
+6. 重新打开 Codex，并新建一个任务测试 Computer Use。
+
+ZIP 同时提供 `.sha256` 校验文件。可在 PowerShell 中核对下载内容：
+
+```powershell
+(Get-FileHash .\Codex-Computer-Use-Repair-v1.0.0.zip -Algorithm SHA256).Hash
+```
+
+输出应与 `.sha256` 文件中的哈希一致。
 
 也可以手动运行：
 
@@ -51,6 +60,29 @@ pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\repair-codex-computer-us
 ```
 
 如果没有 PowerShell 7，启动器会自动使用 Windows PowerShell 5.1。`ExecutionPolicy Bypass` 仅作用于这一次子进程，不会永久修改系统执行策略。
+
+## 仓库结构
+
+```text
+.
+├── repair-codex-computer-use.ps1   # 实际修复逻辑
+├── Run-Codex-Computer-Use-Repair.cmd # 双击启动器
+├── VERSION                          # 当前发布版本
+├── CHANGELOG.md                     # 版本变更记录
+├── tools/New-ReleasePackage.ps1     # 可重复生成 Release ZIP
+├── README.md
+└── LICENSE
+```
+
+Release ZIP 只包含运行所需脚本、使用说明、版本文件和许可证；不会包含恢复出的运行时、插件缓存或个人配置。
+
+维护者可从仓库根目录重复生成相同结构的发布包：
+
+```powershell
+pwsh -NoLogo -NoProfile -File .\tools\New-ReleasePackage.ps1
+```
+
+生成的 ZIP 和 `.sha256` 文件位于 `dist/`，该目录不会提交到仓库。
 
 ## 验证
 
@@ -76,6 +108,7 @@ pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\repair-codex-computer-us
 
 ## 已验证环境
 
+- 工具版本：`v1.0.0`。
 - Codex Microsoft Store 包：`26.715.8383.0`，x64。
 - Windows PowerShell 5.1 与 PowerShell 7.x。
 - 全新隔离恢复：`cua_node` 3,558 个文件 / 287,463,111 字节；bundled marketplace 838 个文件 / 67,865,356 字节；恢复后的 Node.js `v24.14.0`。
@@ -96,6 +129,8 @@ pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\repair-codex-computer-us
 This is an unofficial Windows workaround for Codex installations where an EFS/WindowsApps copy failure prevents `cua_node` or the bundled Browser, Chrome, and Computer Use plugins from initializing.
 
 The script restores components only from the healthy Microsoft Store Codex package already installed on the same machine. It does not download, bundle, or redistribute OpenAI binaries. Existing runtime directories, plugin caches, and `config.toml` are backed up before replacement. Fully quit Codex before running the launcher.
+
+Download the single `Codex-Computer-Use-Repair-v1.0.0.zip` asset from GitHub Releases, extract it, and double-click `Run-Codex-Computer-Use-Repair.cmd`. Verify the ZIP against the accompanying `.sha256` asset if desired.
 
 This workaround is related to [openai/codex#25220](https://github.com/openai/codex/issues/25220). It may need to be rerun after Codex updates and will not fix unrelated Computer Use failures.
 

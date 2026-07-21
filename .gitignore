@@ -3,6 +3,7 @@
 .codex/
 
 # Local recovery and test artifacts
+dist/
 outputs/
 work/
 recovered/
