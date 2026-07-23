@@ -1,5 +1,18 @@
 # Codex Computer Use Windows 临时修复工具
 
+
+## English summary
+
+This is an unofficial Windows workaround for Codex installations where an EFS/WindowsApps copy failure prevents `cua_node` or the bundled Browser, Chrome, and Computer Use plugins from initializing.
+
+The script restores components only from the healthy Microsoft Store Codex package already installed on the same machine. It does not download, bundle, or redistribute OpenAI binaries. Existing runtime directories, plugin caches, and `config.toml` are backed up before replacement. Fully quit Codex before running the launcher.
+
+Download the single `Codex-Computer-Use-Repair-v1.0.0.zip` asset from GitHub Releases, extract it, and double-click `Run-Codex-Computer-Use-Repair.cmd`. Verify the ZIP against the accompanying `.sha256` asset if desired.
+
+This workaround is related to [openai/codex#25220](https://github.com/openai/codex/issues/25220). It may need to be rerun after Codex updates and will not fix unrelated Computer Use failures.
+
+
+
 > [!WARNING]
 > 这是社区提供的临时解决方案，不是 OpenAI 官方修复，也不代表 OpenAI。它会修改当前 Windows 用户的 Codex 运行时、插件缓存和 `config.toml`；运行前请先阅读本页并完全退出 Codex。
 
@@ -124,15 +137,6 @@ pwsh -NoLogo -NoProfile -File .\tools\New-ReleasePackage.ps1
 - 官方插件界面状态仍由 Codex 客户端控制，本工具无法保证界面立即刷新。
 - 请勿运行来源不明、经过修改或附带预编译运行时的版本。
 
-## English summary
-
-This is an unofficial Windows workaround for Codex installations where an EFS/WindowsApps copy failure prevents `cua_node` or the bundled Browser, Chrome, and Computer Use plugins from initializing.
-
-The script restores components only from the healthy Microsoft Store Codex package already installed on the same machine. It does not download, bundle, or redistribute OpenAI binaries. Existing runtime directories, plugin caches, and `config.toml` are backed up before replacement. Fully quit Codex before running the launcher.
-
-Download the single `Codex-Computer-Use-Repair-v1.0.0.zip` asset from GitHub Releases, extract it, and double-click `Run-Codex-Computer-Use-Repair.cmd`. Verify the ZIP against the accompanying `.sha256` asset if desired.
-
-This workaround is related to [openai/codex#25220](https://github.com/openai/codex/issues/25220). It may need to be rerun after Codex updates and will not fix unrelated Computer Use failures.
 
 ## License and disclaimer
 
