@@ -71,12 +71,14 @@ function Test-KeyFilesMatch {
         $destinationFile = Join-Path $Destination $relativePath
         if (-not (Test-Path -LiteralPath $sourceFile -PathType Leaf) -or
             -not (Test-Path -LiteralPath $destinationFile -PathType Leaf)) {
+            Write-Warning "Verification key is missing: $relativePath"
             return $false
         }
 
         $sourceHash = (Get-FileHash -LiteralPath $sourceFile -Algorithm SHA256).Hash
         $destinationHash = (Get-FileHash -LiteralPath $destinationFile -Algorithm SHA256).Hash
         if ($sourceHash -ne $destinationHash) {
+            Write-Warning "Verification key hash mismatch: $relativePath"
             return $false
         }
     }
@@ -98,6 +100,7 @@ function Test-TreeMatches {
     $sourceStats = Get-TreeStats $Source
     $destinationStats = Get-TreeStats $Destination
     if ($sourceStats.Count -ne $destinationStats.Count -or $sourceStats.Bytes -ne $destinationStats.Bytes) {
+        Write-Warning "Tree statistics mismatch: source=$($sourceStats.Count) files/$($sourceStats.Bytes) bytes, destination=$($destinationStats.Count) files/$($destinationStats.Bytes) bytes."
         return $false
     }
 
@@ -105,9 +108,11 @@ function Test-TreeMatches {
         $relativePath = Get-RelativePath -BasePath $Source -ChildPath $sourceFile.FullName
         $destinationFile = Join-Path $Destination $relativePath
         if (-not (Test-Path -LiteralPath $destinationFile -PathType Leaf)) {
+            Write-Warning "Destination file is missing: $relativePath"
             return $false
         }
         if ((Get-Item -LiteralPath $destinationFile -Force).Length -ne $sourceFile.Length) {
+            Write-Warning "Destination file length mismatch: $relativePath"
             return $false
         }
     }
@@ -379,9 +384,9 @@ if ($PackageRoot -and -not $TestRoot) {
 }
 
 if (-not $SkipProcessCheck -and -not $TestRoot) {
-    $running = @(Get-Process -Name 'Codex' -ErrorAction SilentlyContinue)
+    $running = @(Get-Process -Name 'Codex', 'ChatGPT' -ErrorAction SilentlyContinue)
     if ($running.Count -gt 0) {
-        throw 'Codex is still running. Fully quit it from the system tray, then run this repair again.'
+        throw 'ChatGPT/Codex is still running. Fully quit it from the system tray, then run this repair again.'
     }
 }
 
@@ -436,7 +441,7 @@ $marketplaceKeys = @(
     'plugins\browser\scripts\browser-client.mjs',
     'plugins\chrome\.codex-plugin\plugin.json',
     'plugins\computer-use\.codex-plugin\plugin.json',
-    'plugins\computer-use\scripts\computer-use-client.mjs'
+    'plugins\computer-use\skills\computer-use\SKILL.md'
 )
 Copy-TreeByDecryptedStream `
     -Source $marketplaceSource `

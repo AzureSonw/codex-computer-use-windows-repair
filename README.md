@@ -7,7 +7,7 @@ This is an unofficial Windows workaround for Codex installations where an EFS/Wi
 
 The script restores components only from the healthy Microsoft Store Codex package already installed on the same machine. It does not download, bundle, or redistribute OpenAI binaries. Existing runtime directories, plugin caches, and `config.toml` are backed up before replacement. Fully quit Codex before running the launcher.
 
-Download the single `Codex-Computer-Use-Repair-v1.0.0.zip` asset from GitHub Releases, extract it, and double-click `Run-Codex-Computer-Use-Repair.cmd`. Verify the ZIP against the accompanying `.sha256` asset if desired.
+The Codex 26.820 compatibility fix is currently available on `main` and is not included in the v1.0.0 release asset. For Codex 26.820, download the [main branch source ZIP](https://github.com/AzureSonw/codex-computer-use-windows-repair/archive/refs/heads/main.zip), extract it, and double-click `Run-Codex-Computer-Use-Repair.cmd`. The v1.0.0 release remains available for the earlier 26.715 build.
 
 This workaround is related to [openai/codex#25220](https://github.com/openai/codex/issues/25220). It may need to be rerun after Codex updates and will not fix unrelated Computer Use failures.
 
@@ -20,7 +20,7 @@ This workaround is related to [openai/codex#25220](https://github.com/openai/cod
 
 本仓库只包含可审阅的 PowerShell 脚本和 CMD 启动器，不包含、分发或重新打包任何 OpenAI 二进制文件、插件源码、缓存或用户配置。
 
-当前稳定版为 **v1.0.0**。普通用户请从 GitHub Releases 下载单个 ZIP 包；仓库根目录保留原始脚本，方便审阅。
+当前 Release 稳定版为 **v1.0.0**，面向较早的 Codex 26.715。`main` 已包含 Codex 26.820 兼容修复，但该修复尚未进入 v1.0.0 Release 资产；26.820 用户请下载 [`main` 源码 ZIP](https://github.com/AzureSonw/codex-computer-use-windows-repair/archive/refs/heads/main.zip)。
 
 ## 适用症状
 
@@ -51,7 +51,7 @@ This workaround is related to [openai/codex#25220](https://github.com/openai/cod
 
 ## 使用方法
 
-1. 在仓库的 [Releases](https://github.com/AzureSonw/codex-computer-use-windows-repair/releases) 页面下载 `Codex-Computer-Use-Repair-v1.0.0.zip`。
+1. Codex 26.820 用户下载 [`main` 源码 ZIP](https://github.com/AzureSonw/codex-computer-use-windows-repair/archive/refs/heads/main.zip)；Codex 26.715 用户也可从 [Releases](https://github.com/AzureSonw/codex-computer-use-windows-repair/releases) 下载 `Codex-Computer-Use-Repair-v1.0.0.zip`。
 2. 解压 ZIP；不要直接在压缩包预览窗口中运行文件。
 3. 完全退出 Codex。
 4. 双击 `Run-Codex-Computer-Use-Repair.cmd`。
@@ -121,10 +121,10 @@ pwsh -NoLogo -NoProfile -File .\tools\New-ReleasePackage.ps1
 
 ## 已验证环境
 
-- 工具版本：`v1.0.0`。
-- Codex Microsoft Store 包：`26.715.8383.0`，x64。
+- 已验证代码：`v1.0.0`（Codex 26.715）与当前 `main`（Codex 26.820 兼容修复）。
+- Codex Microsoft Store 包：`26.715.8383.0` 与 `26.820.9563.0`，x64。
 - Windows PowerShell 5.1 与 PowerShell 7.x。
-- 全新隔离恢复：`cua_node` 3,558 个文件 / 287,463,111 字节；bundled marketplace 838 个文件 / 67,865,356 字节；恢复后的 Node.js `v24.14.0`。
+- `26.820.9563.0` 全新隔离恢复：`cua_node` 4,680 个文件 / 334,417,714 字节；bundled marketplace 826 个文件 / 81,679,036 字节；恢复后的 Node.js `v24.19.0`。
 - 含单引号的用户路径和重复运行场景。
 
 其他 Codex 版本会根据本机包内容动态计算运行时目录名，但尚未逐一验证。
