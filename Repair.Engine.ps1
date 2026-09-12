@@ -53,15 +53,92 @@ function Get-RepairPaths {
     return [pscustomobject]@{ CodexHome = $configHome; LocalRoot = $localRoot; StateRoot = (Join-Path $localRoot 'computer-use-repair') }
 }
 
+function Get-LimitedProcessImagePath {
+    param([int]$ProcessId)
+    # Get-Process.Path can require module access and return null for unrelated
+    # elevated apps. Limited image queries do not read process memory.
+    if (-not ('CodexRepair.ProcessImageLookup' -as [type])) {
+        Add-Type -TypeDefinition @'
+using System;
+using System.Text;
+using System.Runtime.InteropServices;
+namespace CodexRepair {
+    public static class ProcessImageLookup {
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern IntPtr OpenProcess(uint access, bool inherit, int id);
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        private static extern bool QueryFullProcessImageName(IntPtr handle, uint flags, StringBuilder name, ref uint size);
+        [DllImport("kernel32.dll")]
+        private static extern bool CloseHandle(IntPtr handle);
+        public static string GetPath(int id) {
+            IntPtr handle = OpenProcess(0x1000, false, id); // PROCESS_QUERY_LIMITED_INFORMATION
+            if (handle == IntPtr.Zero) return null;
+            try {
+                uint size = 32768;
+                var name = new StringBuilder((int)size);
+                return QueryFullProcessImageName(handle, 0, name, ref size) ? name.ToString() : null;
+            } finally { CloseHandle(handle); }
+        }
+    }
+}
+'@
+    }
+    return [CodexRepair.ProcessImageLookup]::GetPath($ProcessId)
+}
+
 function Get-RepairProcesses {
     param([string]$RuntimeParent)
-    $found = @(Get-Process -Name 'Codex', 'ChatGPT', 'node_repl', 'codex-computer-use' -ErrorAction SilentlyContinue)
-    # Include orphaned Node processes that still use the repaired runtime.
-    foreach ($process in @(Get-Process -Name 'node' -ErrorAction SilentlyContinue)) {
+    $runtimePrefix = (Get-FullPath $RuntimeParent).TrimEnd('\') + '\'
+    foreach ($process in @(Get-Process -Name 'Codex', 'ChatGPT', 'node_repl', 'codex-computer-use', 'node' -ErrorAction SilentlyContinue)) {
         try { $path = $process.Path } catch { $path = $null }
-        if (-not $path -or $path.StartsWith($RuntimeParent.TrimEnd('\') + '\', [StringComparison]::OrdinalIgnoreCase)) { $found += $process }
+        if (-not $path) {
+            try { $path = Get-LimitedProcessImagePath $process.Id } catch { $path = $null }
+        }
+        if ($process.ProcessName -eq 'node' -and $path -and
+            -not $path.StartsWith($runtimePrefix, [StringComparison]::OrdinalIgnoreCase)) { continue }
+        $reason = if ($path) { 'Codex app or Computer Use runtime' } else { 'Image path unavailable; cannot safely rule out runtime use' }
+        [pscustomobject]@{ Id = $process.Id; ProcessName = $process.ProcessName; Path = $path; Reason = $reason }
     }
-    return $found
+}
+
+function Format-RepairProcesses {
+    param([object[]]$Processes)
+    return ((@($Processes | ForEach-Object { "$($_.ProcessName) (PID $($_.Id))" })) -join ', ')
+}
+
+function Wait-RepairProcesses {
+    param([string]$RuntimeParent, [int]$WaitSeconds, $Report, [string]$ReportPath)
+    $timer = [Diagnostics.Stopwatch]::StartNew()
+    $lastDisplay = -15
+    $previous = ''
+    while ($true) {
+        $blocking = @(Get-RepairProcesses $RuntimeParent)
+        $Report.BlockingProcesses = $blocking
+        if (-not $blocking.Count) {
+            if ($previous) { Write-Host 'Blocking processes have exited. Continuing repair...' }
+            return
+        }
+        $summary = Format-RepairProcesses $blocking
+        $remaining = [Math]::Max(0, [Math]::Ceiling($WaitSeconds - $timer.Elapsed.TotalSeconds))
+        if ($summary -ne $previous -or $timer.Elapsed.TotalSeconds - $lastDisplay -ge 15) {
+            Write-Host "Blocking processes: $summary"
+            foreach ($process in $blocking) {
+                if ($process.PSObject.Properties['Path'] -and $process.Path) { Write-Host "  PID $($process.Id): $($process.Path)" }
+            }
+            if ($remaining -gt 0) {
+                Write-Host "Keep this CMD window open. Fully quit ChatGPT/Codex from the tray; repair will continue here (up to $remaining seconds remaining)."
+            }
+            $Report.Status = 'Waiting'; $Report.ExitCode = 10
+            $Report.Message = "Waiting for: $summary"
+            Write-RepairJson $ReportPath $Report
+            $lastDisplay = $timer.Elapsed.TotalSeconds
+            $previous = $summary
+        }
+        if ($timer.Elapsed.TotalSeconds -ge $WaitSeconds) {
+            throw "DEFERRED: Still blocked by $summary. Check these PIDs in Task Manager. No process was stopped; run the CMD again after they exit."
+        }
+        Start-Sleep -Milliseconds 1000
+    }
 }
 
 function Write-RepairJson {
@@ -197,7 +274,7 @@ function Invoke-CodexRepair {
     $statePath = Join-Path $paths.StateRoot 'state.json'
     $reportPath = Join-Path $paths.StateRoot 'last-result.json'
     $script:RepairBackups = [Collections.Generic.List[string]]::new()
-    $report = [ordered]@{ Status = 'Checking'; ExitCode = 1; CheckedAt = [DateTime]::UtcNow.ToString('o'); Package = ''; PackageVersion = ''; RuntimeHash = ''; Fingerprint = ''; Changed = @(); Backups = @(); Message = ''; Log = '' }
+    $report = [ordered]@{ Status = 'Checking'; ExitCode = 1; CheckedAt = [DateTime]::UtcNow.ToString('o'); Package = ''; PackageVersion = ''; RuntimeHash = ''; Fingerprint = ''; Changed = @(); Backups = @(); BlockingProcesses = @(); Message = ''; Log = '' }
     $state = $null
     $attempted = $false
     try {
@@ -218,20 +295,25 @@ function Invoke-CodexRepair {
         $report.PackageVersion = $package.Version
         Write-Host "Installed package: $($package.Identity)"
         $runtimeParent = Join-Path $paths.LocalRoot 'runtimes\cua_node'
+        if ($Mode -ne 'Check' -and -not $SkipProcessCheck) {
+            Wait-RepairProcesses -RuntimeParent $runtimeParent -WaitSeconds $WaitSeconds -Report $report -ReportPath $reportPath
+            # An update can finish while the user is quitting the application.
+            $package = Resolve-CodexPackageRoot $PackageRoot
+            $script:VerifiedSourceRoot = $package.Root
+            $report.Package = $package.Identity
+            $report.PackageVersion = $package.Version
+        }
         $script:RepairGuard = {
-            if (-not $SkipProcessCheck -and @(Get-RepairProcesses $runtimeParent).Count) { throw 'DEFERRED: ChatGPT/Codex or a Computer Use runtime is running.' }
+            if (-not $SkipProcessCheck) {
+                $blocking = @(Get-RepairProcesses $runtimeParent)
+                $report.BlockingProcesses = $blocking
+                if ($blocking.Count) { throw "DEFERRED: Runtime is in use by $(Format-RepairProcesses $blocking). Run the CMD again after these processes exit." }
+            }
             if (-not $PackageRoot) {
                 $current = Resolve-CodexPackageRoot ''
                 if ($current.Identity -ne $package.Identity -or $current.Root -ne $package.Root) { throw 'DEFERRED: The installed package changed during the check; retry on the next run.' }
             }
         }.GetNewClosure()
-        if ($Mode -ne 'Check') {
-            $deadline = [DateTime]::UtcNow.AddSeconds($WaitSeconds)
-            while (-not $SkipProcessCheck -and @(Get-RepairProcesses $runtimeParent).Count) {
-                if ([DateTime]::UtcNow -ge $deadline) { throw 'DEFERRED: ChatGPT/Codex is running. Check postponed until it is fully closed.' }
-                Start-Sleep -Milliseconds 1000
-            }
-        }
         $state = Read-RepairState $statePath
         $script:HashCache = $state.Hashes
         $script:NextHashCache = @{}

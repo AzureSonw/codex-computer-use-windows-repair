@@ -4,19 +4,21 @@
 
 This unofficial Windows workaround restores `cua_node` and the bundled Browser, Chrome, and Computer Use plugins from the healthy Microsoft Store Codex package already installed on the same machine. It never downloads or redistributes OpenAI binaries.
 
-**v1.2.0 checks first.** Extract [the latest release ZIP](https://github.com/AzureSonw/codex-computer-use-windows-repair/releases/latest) and double-click `Run-Codex-Computer-Use-Repair.cmd`. The launcher checks the installed package identity/version, runtime directory hash, plugin resources, and local integrity. It invokes the repair PowerShell script only when needed. Healthy runs leave runtime, plugins, and configuration unchanged. The same ZIP can usually be reused after Codex updates.
+**v1.2.1 checks first.** Extract [the latest release ZIP](https://github.com/AzureSonw/codex-computer-use-windows-repair/releases/latest) and double-click `Run-Codex-Computer-Use-Repair.cmd`. The launcher checks the installed package identity/version, runtime directory hash, plugin resources, and local integrity. It invokes the repair PowerShell script only when needed. Healthy runs leave runtime, plugins, and configuration unchanged. The same ZIP can usually be reused after Codex updates.
 
-Checks run **only when you run the CMD file**. There are no startup entries, scheduled tasks, background services, or automatic app launches. If repair is needed while ChatGPT/Codex is running, fully quit it and run the CMD again. Existing backups and failed staging directories are retained. The original manual repair script remains available.
+Checks run **only when you run the CMD file**. There are no startup entries, scheduled tasks, background services, or automatic app launches. If repair is needed while ChatGPT/Codex is running, keep the CMD open and fully quit the app from the tray. This invocation waits up to 120 seconds and continues when blockers exit. v1.2.1 fixes unrelated Stream Deck Node processes falsely blocking repair when PowerShell cannot read their module paths. Existing backups and failed staging directories are retained. The original manual repair script remains available.
 
-Verified with a clean isolated restore from Codex `26.901.6511.0` on Windows PowerShell 5.1 and PowerShell 7.x. This workaround concerns [openai/codex#25220](https://github.com/openai/codex/issues/25220); unrelated Computer Use failures may require a different fix.
+Verified with isolated behavior tests on Windows PowerShell 5.1 and PowerShell 7.x and clean isolated restoration of Codex `26.908.4834.0`. This workaround concerns [openai/codex#25220](https://github.com/openai/codex/issues/25220); unrelated Computer Use failures may require a different fix.
 
 ## 用法：双击 CMD，先检查，有问题才修复
 
-1. 从 [Releases](https://github.com/AzureSonw/codex-computer-use-windows-repair/releases/latest) 下载 `Codex-Computer-Use-Repair-v1.2.0.zip`。
+1. 从 [Releases](https://github.com/AzureSonw/codex-computer-use-windows-repair/releases/latest) 下载 `Codex-Computer-Use-Repair-v1.2.1.zip`。
 2. 解压到普通文件夹；不要在 ZIP 预览窗口中运行。
 3. 双击 `Run-Codex-Computer-Use-Repair.cmd`。
 4. 看到 `Healthy` 表示文件完整，无需修复；看到 `Repaired` 表示所需修复已完成。
-5. 如果提示 `Deferred`，先完全退出 ChatGPT/Codex（含托盘和后台进程），再双击 CMD。修复完成后重新打开 Codex，新建任务测试 Computer Use。
+5. 如果列出 `Blocking processes`，保持 CMD 窗口打开，从托盘完全退出 ChatGPT/Codex。工具在本次窗口内最多等待 120 秒，进程退出后继续修复。超时才显示 `Deferred`；可根据列出的 PID 在任务管理器核对残留进程，再重跑。修复完成后重新打开 Codex，新建任务测试 Computer Use。
+
+**已经从托盘退出，却一直提示正在运行？** v1.2.0 可能把路径读不到的其他 Node 程序误判为 Codex，例如 Elgato Stream Deck。请换用 v1.2.1；它会使用 Windows 的有限权限进程路径查询来区分这些程序，不需要退出 Stream Deck。若路径仍确实无法确认，会显示具体 PID 和原因，保持安全停止，不会强制结束任何进程。
 
 **Codex 更新后，通常只需再次运行同一份 CMD，无需重新下载修复工具。** 工具每次都重新发现本机最新的可信安装包，不会把 Codex 版本或插件版本写死。若未来官方改变资源布局或运行时命名规则，工具会停止并提供诊断，届时可能仍需要新版工具。
 
@@ -42,7 +44,8 @@ Verified with a clean isolated restore from Codex `26.901.6511.0` on Windows Pow
 - 只从本机已验证的官方安装包读取解密后的字节流，不修改 WindowsApps，不下载运行时，不上传个人数据。
 - 支持 Microsoft Store 将注册的包目录链接到另一磁盘；拒绝资源树内部或修复目标中的目录链接，避免写出预期范围。
 - 先复制到临时目录并校验，再备份、替换原目录。失败的临时目录会保留；替换失败且目标尚未生成时恢复旧目录。
-- 检测 ChatGPT/Codex、Computer Use 相关进程及使用该运行时的 Node；开始修复和每次正式替换前再次检查。不会强制关闭用户应用，也不会绕过文件占用错误。
+- 检测 ChatGPT/Codex、Computer Use 相关进程及使用该运行时的 Node；读不到 Node 的常规路径时使用 Windows `QueryFullProcessImageName` 确认归属，排除 Stream Deck 等无关 Node。开始修复和每次正式替换前再次检查，不会强制关闭用户应用。
+- 新建临时目录遇到短暂的访问/占用错误时，最多重试 1 秒，并在每次重试前检查应用进程；持续占用时仍停止并保留备份。
 - 同一运行时目录使用独占检查锁，连续双击不会并行修复。检查脚本只会向修复脚本单向调用，不会递归启动。
 - 恢复后执行 Node `--version` 自检，有 10 秒超时，失败时报告错误并保留已有备份。
 - 同一资源连续失败后，按需模式第一次等待 1 小时、第二次等待 4 小时再允许重试，第三次暂停；只有你再次运行工具时才会尝试。更新后的新资源会重新计算重试状态；手动入口可在排查后立即重试。
@@ -84,7 +87,7 @@ powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\repair-codex-c
 
 检查记录位于 `%LOCALAPPDATA%\OpenAI\Codex\computer-use-repair\`：
 
-- `last-result.json`：本次状态、安装包版本、资源指纹、变化组件、备份路径、日志路径。
+- `last-result.json`：本次状态、安装包版本、资源指纹、变化组件、备份路径、日志路径，以及 `BlockingProcesses` 中阻塞进程的名称、PID、路径和原因。
 - `state.json`：完整性缓存、上次全量校验时间和失败重试状态。
 - `logs\`：最近 20 次检查的日志。备份和失败临时目录不会随日志清理而删除。
 - `check.lock`：进程运行时持有的独占锁；文件存在不代表工具常驻。
@@ -111,6 +114,7 @@ repair-codex-computer-use.ps1       # 保留的手动/按需修复入口
 Repair.Engine.ps1                  # 版本发现、检查流程、锁和诊断
 Repair.Core.ps1                    # 文件校验、复制、备份和配置处理
 tests/Test-Repair.ps1              # 不依赖 Pester 的隔离行为测试
+tests/Test-Processes.ps1           # Stream Deck 误判和进程识别回归测试
 tests/Test-InstalledPackage.ps1     # 本机官方包的隔离端到端验证
 tools/New-ReleasePackage.ps1       # Release ZIP 和 SHA-256
 ```
@@ -120,6 +124,8 @@ tools/New-ReleasePackage.ps1       # Release ZIP 和 SHA-256
 ```powershell
 powershell.exe -NoLogo -NoProfile -File .\tests\Test-Repair.ps1
 pwsh.exe -NoLogo -NoProfile -File .\tests\Test-Repair.ps1
+powershell.exe -NoLogo -NoProfile -File .\tests\Test-Processes.ps1
+pwsh.exe -NoLogo -NoProfile -File .\tests\Test-Processes.ps1
 ```
 
 用本机官方包验证完整检查 → 按需恢复 → 重复检查流程；所有恢复文件写入仓库的 `work/`：
@@ -132,6 +138,8 @@ powershell.exe -NoLogo -NoProfile -File .\tests\Test-InstalledPackage.ps1
 
 v1.2.0 在 Windows PowerShell 5.1 和 PowerShell 7.x 下均通过 40 项隔离行为断言及官方包端到端验证。本机 Codex `26.901.6511.0` x64：运行时 4,684 文件 / 337,646,562 字节，marketplace 849 文件 / 81,880,577 字节，Node `v24.19.0`。重复检查在本机隔离环境中，PowerShell 7 约 4–6 秒，5.1 约 13 秒；实际耗时取决于环境。旧版 v1.1.0 曾验证 `26.820.9563.0`；其他官方版本按本机内容动态检测，不保证未来布局始终兼容。
 
+v1.2.1 针对 Codex `26.908.4834.0` x64 完成全新隔离恢复：运行时 4,123 文件 / 263,414,106 字节，marketplace 952 文件 / 82,779,095 字节，Node `v24.20.0`；重复检查未改动配置或新增备份。两个 PowerShell 版本均验证进程路径回退、Stream Deck 排除、真实运行时保留拦截，以及限时等待/超时诊断。
+
 生成发布包：
 
 ```powershell
@@ -143,7 +151,7 @@ powershell.exe -NoLogo -NoProfile -File .\tools\New-ReleasePackage.ps1
 下载后可以核对校验值：
 
 ```powershell
-(Get-FileHash .\Codex-Computer-Use-Repair-v1.2.0.zip -Algorithm SHA256).Hash
+(Get-FileHash .\Codex-Computer-Use-Repair-v1.2.1.zip -Algorithm SHA256).Hash
 ```
 
 ## License and disclaimer

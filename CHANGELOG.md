@@ -2,6 +2,20 @@
 
 All notable changes to this project are documented here.
 
+## [1.2.1] - 2026-09-12
+
+### Fixed
+
+- Fixed unrelated Node processes (observed with Elgato Stream Deck) blocking repair after Codex had fully quit. When `Get-Process.Path` is unreadable, query the process image using `PROCESS_QUERY_LIMITED_INFORMATION` before classifying it. Unrelated resolved Node paths are excluded; genuine runtime users and unresolved processes still block safely.
+- Show blocking process names, PIDs, image paths, and reasons in diagnostics instead of only saying Codex is running.
+- The CMD invocation now waits up to 120 seconds for blockers to exit and continues within the same window. No scheduled task, startup entry, background service, or forced process termination is added.
+- Retry transient directory move access/sharing failures for at most one second, with process checks before retries and existing backup/rollback behavior retained.
+
+### Verified
+
+- Added native process-query and Stream Deck regression tests, with bounded-wait and PID-reporting assertions in the existing isolated suite.
+- Clean isolated restoration from Codex `26.908.4834.0`: 4,123 runtime files / 263,414,106 bytes, 952 marketplace files / 82,779,095 bytes, Node `v24.20.0`; repeated healthy check preserved configuration and backups.
+
 ## [1.2.0] - 2026-09-12
 
 ### Added

@@ -3,13 +3,14 @@ chcp 65001 >nul
 title Codex Computer Use Repair
 echo Checking the installed Codex version and Computer Use files first.
 echo Healthy installations will be left as they are. Repair runs only when needed.
-echo If repair is needed, please fully quit ChatGPT/Codex before trying again.
+echo If repair is needed, keep this window open and fully quit ChatGPT/Codex.
+echo This run can wait up to 120 seconds for the displayed blocking processes.
 echo.
 where pwsh.exe >nul 2>&1
 if errorlevel 1 (
-  powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%~dp0check-codex-computer-use.ps1"
+  powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%~dp0check-codex-computer-use.ps1" -WaitSeconds 120
 ) else (
-  pwsh.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%~dp0check-codex-computer-use.ps1"
+  pwsh.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%~dp0check-codex-computer-use.ps1" -WaitSeconds 120
 )
 set "repair_exit_code=%ERRORLEVEL%"
 echo.

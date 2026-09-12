@@ -182,6 +182,27 @@ function Test-TreeMatches {
     return Test-KeyFilesMatch -Source $Source -Destination $Destination -KeyRelativePaths $KeyRelativePaths
 }
 
+function Move-RepairDirectory {
+    param([string]$Source, [string]$Destination, [string]$AllowedParent)
+    Assert-PathWithin $Source $AllowedParent
+    Assert-PathWithin $Destination $AllowedParent
+    for ($attempt = 0; $attempt -lt 11; $attempt++) {
+        if ($attempt) { & $script:RepairGuard }
+        try { [IO.Directory]::Move($Source, $Destination); return }
+        catch {
+            $failure = $_.Exception
+            while ($failure.InnerException) { $failure = $failure.InnerException }
+            $win32 = $failure.HResult -band 0xffff
+            # Antivirus/indexing can briefly hold a freshly verified staging
+            # directory. Retry for at most one second, never bypass app checks.
+            if ($attempt -eq 10 -or $win32 -notin @(5, 32, 33) -or
+                -not (Test-Path -LiteralPath $Source -PathType Container) -or
+                (Test-Path -LiteralPath $Destination)) { throw }
+            Start-Sleep -Milliseconds 100
+        }
+    }
+}
+
 function Move-ExistingToBackup {
     param(
         [string]$Path,
@@ -199,7 +220,7 @@ function Move-ExistingToBackup {
         $backup = "$backup-$([Guid]::NewGuid().ToString('N'))"
     }
     Assert-PathWithin -Path $backup -Parent $AllowedParent
-    [IO.Directory]::Move($Path, $backup)
+    Move-RepairDirectory $Path $backup $AllowedParent
     return $backup
 }
 
@@ -270,7 +291,7 @@ function Copy-TreeByDecryptedStream {
             $script:RepairBackups.Add($backup)
         }
         & $script:RepairGuard
-        [IO.Directory]::Move($stage, $Final)
+        Move-RepairDirectory $stage $Final $AllowedParent
         $stats = Get-TreeStats $Final
         Write-Host "$Label restored; structure and key hashes verified: $($stats.Count) files, $($stats.Bytes) bytes."
     }

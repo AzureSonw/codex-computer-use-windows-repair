@@ -99,11 +99,15 @@ function Get-RepairProcesses { param([string]$RuntimeParent); return [pscustomob
 $before = Read-Text $configPath
 $result = Invoke-CodexRepair -Mode Auto @busyArguments
 Assert ($result.Status -eq 'Deferred' -and (Read-Text $configPath) -eq $before) 'Running app defers repair without changing configuration'
+Assert ($result.Message.Contains('ChatGPT (PID 999)') -and $result.BlockingProcesses[0].Id -eq 999) 'Deferred diagnostics identify the blocking process and PID'
+$waitClock = [Diagnostics.Stopwatch]::StartNew()
+$result = Invoke-CodexRepair -Mode Auto -WaitSeconds 1 @busyArguments
+Assert ($result.Status -eq 'Deferred' -and $waitClock.Elapsed.TotalSeconds -lt 10 -and (Read-Text $configPath) -eq $before) 'A process that stays running causes bounded waiting without changing configuration'
 function Get-RepairProcesses { param([string]$RuntimeParent); return @() }
 $result = Invoke-CodexRepair -Mode Auto @busyArguments
 Assert ($result.Status -eq 'Healthy') 'A later invocation succeeds after the app closes'
 $script:busyCalls = 0
-function Get-RepairProcesses { param([string]$RuntimeParent); $script:busyCalls++; if ($script:busyCalls -eq 1) { return [pscustomobject]@{ Id = 999 } }; return @() }
+function Get-RepairProcesses { param([string]$RuntimeParent); $script:busyCalls++; if ($script:busyCalls -eq 1) { return [pscustomobject]@{ Id = 999; ProcessName = 'ChatGPT' } }; return @() }
 $result = Invoke-CodexRepair -Mode Auto -WaitSeconds 2 @busyArguments
 Assert ($result.Status -eq 'Healthy' -and $script:busyCalls -ge 2) 'Optional wait observes app exit and remains bounded'
 $lock = [IO.File]::Open((Join-Path $paths.StateRoot 'check.lock'), [IO.FileMode]::Open, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
