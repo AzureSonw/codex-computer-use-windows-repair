@@ -2,141 +2,150 @@
 
 ## English summary
 
-This is an unofficial Windows workaround for Codex installations where an EFS/WindowsApps copy failure prevents `cua_node` or the bundled Browser, Chrome, and Computer Use plugins from initializing.
+This unofficial Windows workaround restores `cua_node` and the bundled Browser, Chrome, and Computer Use plugins from the healthy Microsoft Store Codex package already installed on the same machine. It never downloads or redistributes OpenAI binaries.
 
-The script restores components only from the healthy Microsoft Store Codex package already installed on the same machine. It does not download, bundle, or redistribute OpenAI binaries. Existing runtime directories, plugin caches, and `config.toml` are backed up before replacement. Fully quit Codex before running the launcher.
+**v1.2.0 checks first.** Extract [the latest release ZIP](https://github.com/AzureSonw/codex-computer-use-windows-repair/releases/latest) and double-click `Run-Codex-Computer-Use-Repair.cmd`. The launcher checks the installed package identity/version, runtime directory hash, plugin resources, and local integrity. It invokes the repair PowerShell script only when needed. Healthy runs leave runtime, plugins, and configuration unchanged. The same ZIP can usually be reused after Codex updates.
 
-The current `v1.1.0` release is verified with Codex `26.820.9563.0` and `26.901.6511.0`. Download `Codex-Computer-Use-Repair-v1.1.0.zip` from [Releases](https://github.com/AzureSonw/codex-computer-use-windows-repair/releases), extract it, and double-click `Run-Codex-Computer-Use-Repair.cmd`.
+Checks run **only when you run the CMD file**. There are no startup entries, scheduled tasks, background services, or automatic app launches. If repair is needed while ChatGPT/Codex is running, fully quit it and run the CMD again. Existing backups and failed staging directories are retained. The original manual repair script remains available.
 
-This workaround is related to [openai/codex#25220](https://github.com/openai/codex/issues/25220). It may need to be rerun after Codex updates and will not fix unrelated Computer Use failures.
+Verified with a clean isolated restore from Codex `26.901.6511.0` on Windows PowerShell 5.1 and PowerShell 7.x. This workaround concerns [openai/codex#25220](https://github.com/openai/codex/issues/25220); unrelated Computer Use failures may require a different fix.
+
+## 用法：双击 CMD，先检查，有问题才修复
+
+1. 从 [Releases](https://github.com/AzureSonw/codex-computer-use-windows-repair/releases/latest) 下载 `Codex-Computer-Use-Repair-v1.2.0.zip`。
+2. 解压到普通文件夹；不要在 ZIP 预览窗口中运行。
+3. 双击 `Run-Codex-Computer-Use-Repair.cmd`。
+4. 看到 `Healthy` 表示文件完整，无需修复；看到 `Repaired` 表示所需修复已完成。
+5. 如果提示 `Deferred`，先完全退出 ChatGPT/Codex（含托盘和后台进程），再双击 CMD。修复完成后重新打开 Codex，新建任务测试 Computer Use。
+
+**Codex 更新后，通常只需再次运行同一份 CMD，无需重新下载修复工具。** 工具每次都重新发现本机最新的可信安装包，不会把 Codex 版本或插件版本写死。若未来官方改变资源布局或运行时命名规则，工具会停止并提供诊断，届时可能仍需要新版工具。
+
+只在你运行 CMD 时检查。**没有开机检查、每 15 分钟检查、计划任务、常驻进程或自动启动 Codex。** 无需安装，也无需卸载服务；不再需要时删除解压的工具文件夹即可。已经修复的文件和备份会保留，回退方法见下文。
 
 > [!WARNING]
-> 这是社区提供的临时解决方案，不是 OpenAI 官方修复，也不代表 OpenAI。它会修改当前 Windows 用户的 Codex 运行时、插件缓存和 `config.toml`；运行前请先阅读本页并完全退出 Codex。
+> 这是社区临时解决方案，不是 OpenAI 官方修复。需要修复时会修改当前用户的 Codex 运行时、相关插件缓存及必要的 `config.toml` 条目。只支持 Windows 上通过 Microsoft Store/MSIX 安装的 Codex。
 
-当 Windows 版 Codex 因 WindowsApps/EFS 复制错误而无法生成 `cua_node`，或 Browser、Chrome、Computer Use 内置插件不可用时，本工具会尝试从同一台电脑上已经安装的 Microsoft Store Codex 软件包恢复所需文件。
+## 它检查什么
 
-本仓库只包含可审阅的 PowerShell 脚本和 CMD 启动器，不包含、分发或重新打包任何 OpenAI 二进制文件、插件源码、缓存或用户配置。
+- **包身份和版本**：仅接受 `OpenAI.Codex_2p2nqsd0c76g0`，要求发布者 ID 正确、签名类型为 Store、状态正常；按数字版本选择当前用户安装的最新包。
+- **运行时目录**：使用本机包的 `manifest.json`、`node.exe`、`node_repl.exe` 计算 Codex 使用的 16 位目录哈希。
+- **资源变化**：比较完整源文件清单和内容指纹；插件版本号没变但内容变了，也能识别。
+- **目标完整性**：检查文件路径、数量、大小和 SHA-256，涵盖运行时、bundled marketplace 及三个插件缓存。只恢复有差异的目录。
+- **必要配置**：CMD 按需修复时保留已有的插件 `enabled = false` 选择，不会因为用户禁用插件而反复修复。仅相关配置不完整时更新，并保留无关条目。
 
-当前稳定版为 **v1.1.0**，已验证 Codex `26.820.9563.0` 与 `26.901.6511.0`。普通用户请从 [Releases](https://github.com/AzureSonw/codex-computer-use-windows-repair/releases) 下载单个 ZIP 包；仓库根目录保留原始脚本，方便审阅。
+首次检查计算所有文件的 SHA-256。后续用文件大小和 UTC 修改时间复用已验证哈希，每次仍重新枚举文件并校验关键文件哈希；距上次全量校验超过 24 小时，会在**下一次运行工具时**重新计算全部哈希。这不是后台定时任务。可用 `-FullCheck` 随时强制全量校验。
 
-## 适用症状
+此缓存用于检测复制失败和普通文件损坏，不是对抗篡改的安全扫描。若非关键文件的内容、大小和修改时间被同时伪造，快速检查可能要到全量校验时才发现。
 
-- Computer Use、Browser 或 Chrome 插件显示不可用。
-- `node_repl`、`cua_node` 或 `codex-computer-use.exe` 未生成到用户目录。
-- Codex 安装包内存在完整运行时，但客户端无法把它复制出来。
-- 日志中出现 WindowsApps、EFS、`copyfile`、`Access is denied` 等复制错误。
+## 修复时的保护
 
-相关公开问题：[openai/codex#25220](https://github.com/openai/codex/issues/25220)。如果故障原因不同，这个工具可能没有效果。
+- 只从本机已验证的官方安装包读取解密后的字节流，不修改 WindowsApps，不下载运行时，不上传个人数据。
+- 支持 Microsoft Store 将注册的包目录链接到另一磁盘；拒绝资源树内部或修复目标中的目录链接，避免写出预期范围。
+- 先复制到临时目录并校验，再备份、替换原目录。失败的临时目录会保留；替换失败且目标尚未生成时恢复旧目录。
+- 检测 ChatGPT/Codex、Computer Use 相关进程及使用该运行时的 Node；开始修复和每次正式替换前再次检查。不会强制关闭用户应用，也不会绕过文件占用错误。
+- 同一运行时目录使用独占检查锁，连续双击不会并行修复。检查脚本只会向修复脚本单向调用，不会递归启动。
+- 恢复后执行 Node `--version` 自检，有 10 秒超时，失败时报告错误并保留已有备份。
+- 同一资源连续失败后，按需模式第一次等待 1 小时、第二次等待 4 小时再允许重试，第三次暂停；只有你再次运行工具时才会尝试。更新后的新资源会重新计算重试状态；手动入口可在排查后立即重试。
+- 若检测到上次修复被中断，按需模式暂停并提示查看日志、备份后运行手动入口。
 
-## 它会做什么
+请在需要修复时完全退出 Codex，并在工具结束前不要重新启动。Windows 没有为本工具提供原子化的“阻止应用启动并替换目录”接口；脚本通过重复进程检查和替换失败回退来处理竞争情况。
 
-- 只接受包身份为 `OpenAI.Codex_2p2nqsd0c76g0`、状态正常且签名类型为 Microsoft Store 的已安装 Codex 包。
-- 通过解密后的字节流恢复官方 `cua_node` 运行时和 `openai-bundled` marketplace。
-- 初始化 Browser、Chrome、Computer Use 的本地插件缓存。
-- 修改前为现有目录和 `config.toml` 创建带时间戳的备份。
-- 比较源和目标的文件结构、大小及关键文件 SHA-256，最后运行恢复出的 Node.js 执行 `--version` 自检。
-- 在失败且正式目标尚未生成时，自动恢复刚刚移走的旧目录。
+## 命令行与原有手动入口
 
-它不会从第三方站点下载运行时，不会修改受保护的 WindowsApps 安装包，也不会上传配置、屏幕内容或账号信息。脚本本身不发起网络请求。
+需要 Windows PowerShell 5.1 或 PowerShell 7.x。CMD 优先使用 PowerShell 7，没有则使用 Windows PowerShell 5.1。执行策略 Bypass 只作用于该次子进程。
 
-## 使用前
-
-- 仅支持 Windows 上通过 Microsoft Store/MSIX 安装的 Codex。
-- 需要 Windows PowerShell 5.1 或 PowerShell 7.x。
-- 建议预留至少 1 GB 可用空间；存在旧运行时并创建备份时可能需要更多。
-- 必须完全退出 Codex，包括系统托盘和后台进程。脚本检测到 Codex 仍在运行时会停止。
-
-## 使用方法
-
-1. 在仓库的 [Releases](https://github.com/AzureSonw/codex-computer-use-windows-repair/releases) 页面下载 `Codex-Computer-Use-Repair-v1.1.0.zip`。
-2. 解压 ZIP；不要直接在压缩包预览窗口中运行文件。
-3. 完全退出 Codex。
-4. 双击 `Run-Codex-Computer-Use-Repair.cmd`。
-5. 等待窗口显示 `Repair completed successfully.`。
-6. 重新打开 Codex，并新建一个任务测试 Computer Use。
-
-ZIP 同时提供 `.sha256` 校验文件。可在 PowerShell 中核对下载内容：
+只检查并生成诊断，不修复 Codex：
 
 ```powershell
-(Get-FileHash .\Codex-Computer-Use-Repair-v1.1.0.zip -Algorithm SHA256).Hash
+powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\check-codex-computer-use.ps1 -CheckOnly
 ```
 
-输出应与 `.sha256` 文件中的哈希一致。
-
-也可以手动运行：
+强制全量检查，有问题再修复：
 
 ```powershell
-pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\repair-codex-computer-use.ps1
+powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\check-codex-computer-use.ps1 -FullCheck
 ```
 
-如果没有 PowerShell 7，启动器会自动使用 Windows PowerShell 5.1。`ExecutionPolicy Bypass` 仅作用于这一次子进程，不会永久修改系统执行策略。
+需要修复时最多等待应用退出 60 秒，超时后退出；不启动后台等待：
 
-## 仓库结构
+```powershell
+powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\check-codex-computer-use.ps1 -WaitSeconds 60
+```
+
+**原有手动修复入口**，适合排查失败原因后立即重试。此入口会完整校验，并按原有行为重新启用三个插件、备份及更新相关配置：
+
+```powershell
+powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\repair-codex-computer-use.ps1
+```
+
+脚本遵循 `CODEX_HOME` 环境变量；未设置时使用 `%USERPROFILE%\.codex`。运行时位于 `%LOCALAPPDATA%\OpenAI\Codex\runtimes\cua_node`。请预留至少 1 GB 空间，已有备份时可能需要更多。
+
+## 诊断、退出码和备份
+
+检查记录位于 `%LOCALAPPDATA%\OpenAI\Codex\computer-use-repair\`：
+
+- `last-result.json`：本次状态、安装包版本、资源指纹、变化组件、备份路径、日志路径。
+- `state.json`：完整性缓存、上次全量校验时间和失败重试状态。
+- `logs\`：最近 20 次检查的日志。备份和失败临时目录不会随日志清理而删除。
+- `check.lock`：进程运行时持有的独占锁；文件存在不代表工具常驻。
+
+| 退出码 | 状态 | 下一步 |
+| --- | --- | --- |
+| 0 | Healthy / Repaired | 无需修复，或所需修复成功 |
+| 2 | NeedsRepair | 只检查模式发现需要修复 |
+| 10 | Deferred | 应用运行、包正在更新或另一检查持有锁；稍后手动重跑 |
+| 11 | Cooldown | 失败后的重试冷却中；查看诊断 |
+| 12 | Paused | 连续失败或上次修复被中断；查看诊断后使用手动入口 |
+| 1 | Failed | 检查或修复失败；保留错误输出和备份 |
+
+被替换目录备份为 `*.before-computer-use-repair-时间戳`；配置备份为 `config.toml.before-computer-use-repair-时间戳`。若失败后旧目录已自动恢复，其备份路径可能已移回原名，请结合日志判断。不同哈希的旧运行时也会保留。
+
+回退时完全退出 Codex，将新生成的对应目录或配置移到别处，再把备份改回原名。多个组件分步替换，部分成功后失败时请按诊断中列出的组件回退。确认稳定后可自行整理备份、失败的 `.staging-*` 目录和旧运行时。不要把含个人配置的文件提交到 GitHub。
+
+## 开发与验证
 
 ```text
-.
-├── repair-codex-computer-use.ps1   # 实际修复逻辑
-├── Run-Codex-Computer-Use-Repair.cmd # 双击启动器
-├── VERSION                          # 当前发布版本
-├── CHANGELOG.md                     # 版本变更记录
-├── tools/New-ReleasePackage.ps1     # 可重复生成 Release ZIP
-├── README.md
-└── LICENSE
+Run-Codex-Computer-Use-Repair.cmd   # 双击：先检查
+check-codex-computer-use.ps1        # 正常退出；需要时调用修复入口
+repair-codex-computer-use.ps1       # 保留的手动/按需修复入口
+Repair.Engine.ps1                  # 版本发现、检查流程、锁和诊断
+Repair.Core.ps1                    # 文件校验、复制、备份和配置处理
+tests/Test-Repair.ps1              # 不依赖 Pester 的隔离行为测试
+tests/Test-InstalledPackage.ps1     # 本机官方包的隔离端到端验证
+tools/New-ReleasePackage.ps1       # Release ZIP 和 SHA-256
 ```
 
-Release ZIP 只包含运行所需脚本、使用说明、版本文件和许可证；不会包含恢复出的运行时、插件缓存或个人配置。
-
-维护者可从仓库根目录重复生成相同结构的发布包：
+运行隔离行为测试（不会改动真实 Codex 配置）：
 
 ```powershell
-pwsh -NoLogo -NoProfile -File .\tools\New-ReleasePackage.ps1
+powershell.exe -NoLogo -NoProfile -File .\tests\Test-Repair.ps1
+pwsh.exe -NoLogo -NoProfile -File .\tests\Test-Repair.ps1
 ```
 
-生成的 ZIP 和 `.sha256` 文件位于 `dist/`，该目录不会提交到仓库。
+用本机官方包验证完整检查 → 按需恢复 → 重复检查流程；所有恢复文件写入仓库的 `work/`：
 
-## 验证
+```powershell
+powershell.exe -NoLogo -NoProfile -File .\tests\Test-InstalledPackage.ps1
+```
 
-修复完成后：
+底层 `-PackageRoot` 和 `-SkipProcessCheck` 仅可配合隔离 `-TestRoot` 使用，不能用于真实用户目录的修复。行为测试使用小型假资源和替代 Node 自检；官方包端到端测试则实际恢复文件并执行恢复出的 Node。
 
-1. 重新启动 Codex。
-2. 打开插件设置，确认 Browser、Chrome 和 Computer Use 是否恢复。
-3. 新建任务，让 Codex 尝试列出窗口或应用程序。
-4. 如果仍失败，请保留修复窗口输出，并查看最新 Codex 日志确认是否是另一类故障。
+v1.2.0 在 Windows PowerShell 5.1 和 PowerShell 7.x 下均通过 40 项隔离行为断言及官方包端到端验证。本机 Codex `26.901.6511.0` x64：运行时 4,684 文件 / 337,646,562 字节，marketplace 849 文件 / 81,880,577 字节，Node `v24.19.0`。重复检查在本机隔离环境中，PowerShell 7 约 4–6 秒，5.1 约 13 秒；实际耗时取决于环境。旧版 v1.1.0 曾验证 `26.820.9563.0`；其他官方版本按本机内容动态检测，不保证未来布局始终兼容。
 
-## 备份与回退
+生成发布包：
 
-被替换的目录会改名为 `*.before-computer-use-repair-时间戳`，配置备份名为 `config.toml.before-computer-use-repair-时间戳`。具体路径会打印在修复窗口中，脚本不会删除这些备份。
+```powershell
+powershell.exe -NoLogo -NoProfile -File .\tools\New-ReleasePackage.ps1
+```
 
-如需回退：
+`dist/` 下生成 ZIP 和 `.sha256`。ZIP 使用明确的文件白名单，只包含原创工具脚本、CMD、README、CHANGELOG、VERSION 和许可证，不包含测试输出、官方运行时、插件源码、缓存或个人配置。
 
-1. 完全退出 Codex。
-2. 把修复后生成的对应目录或 `config.toml` 移到别处。
-3. 将控制台中记录的备份改回原名称。
-4. 重新启动 Codex。
+下载后可以核对校验值：
 
-多次运行会保留多份备份，请在确认 Codex 稳定后自行整理；不要把包含个人配置的备份提交到 GitHub。
-
-## 已验证环境
-
-- 工具版本：`v1.1.0`。
-- Codex Microsoft Store 包：`26.820.9563.0` 与 `26.901.6511.0`，x64。
-- Windows PowerShell 5.1 与 PowerShell 7.x。
-- `26.820.9563.0` 全新隔离恢复：`cua_node` 4,680 个文件 / 334,417,714 字节；bundled marketplace 826 个文件 / 81,679,036 字节；恢复后的 Node.js `v24.19.0`。
-- `26.901.6511.0` 全新隔离恢复：`cua_node` 4,684 个文件 / 337,646,562 字节；bundled marketplace 849 个文件 / 81,880,577 字节；恢复后的 Node.js `v24.19.0`。
-- 含单引号的用户路径和重复运行场景。
-
-其他 Codex 版本会根据本机包内容动态计算运行时目录名，但尚未逐一验证。
-
-## 已知局限
-
-- 这是针对特定复制故障的变通方案，不保证修复所有 Computer Use 问题。
-- Codex 更新、重装或启动时可能覆盖恢复结果；更新后可再次运行以从最新本机包刷新文件。
-- 本地 marketplace 快照来自运行脚本时的已安装 Codex 版本，长期不重跑可能变旧。
-- 官方插件界面状态仍由 Codex 客户端控制，本工具无法保证界面立即刷新。
-- 请勿运行来源不明、经过修改或附带预编译运行时的版本。
+```powershell
+(Get-FileHash .\Codex-Computer-Use-Repair-v1.2.0.zip -Algorithm SHA256).Hash
+```
 
 ## License and disclaimer
 
-本仓库中的原创脚本以 [MIT License](LICENSE) 发布。该许可不适用于 OpenAI/Codex 软件、运行时或插件；这些内容不在本仓库中分发。
-
-使用本工具需要自行承担风险。项目与 OpenAI 无隶属或授权关系；OpenAI 与 Codex 是其各自权利人的商标。
+原创脚本使用 [MIT License](LICENSE)。许可不适用于 OpenAI/Codex 软件、运行时或插件；这些内容不在本仓库中分发。项目与 OpenAI 无隶属或授权关系，使用者需自行评估此临时修复是否适用于自己的故障。

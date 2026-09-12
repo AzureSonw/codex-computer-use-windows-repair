@@ -26,9 +26,13 @@ $checksumPath = "$zipPath.sha256"
 
 $requiredFiles = @(
     'repair-codex-computer-use.ps1',
+    'check-codex-computer-use.ps1',
+    'Repair.Core.ps1',
+    'Repair.Engine.ps1',
     'Run-Codex-Computer-Use-Repair.cmd',
     'README.md',
     'VERSION',
+    'CHANGELOG.md',
     'LICENSE'
 )
 
