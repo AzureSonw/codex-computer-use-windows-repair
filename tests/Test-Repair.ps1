@@ -10,6 +10,7 @@ function Assert { param([bool]$Condition, [string]$Message); if (-not $Condition
 function Put { param([string]$Path, [string]$Text); New-Item -ItemType Directory -Path (Split-Path -Parent $Path) -Force | Out-Null; [IO.File]::WriteAllText($Path, $Text, [Text.UTF8Encoding]::new($false)) }
 function Read-Text { param([string]$Path); return [IO.File]::ReadAllText($Path) }
 function Count-Backups { return @(Get-ChildItem -LiteralPath $target -Recurse -Force | Where-Object { $_.Name -like '*.before-computer-use-repair-*' }).Count }
+. (Join-Path $PSScriptRoot 'Chrome.Fixture.ps1')
 
 $fixture = Join-Path $suiteRoot 'official fixture'
 $runtime = Join-Path $fixture 'app\resources\cua_node'
@@ -22,8 +23,9 @@ foreach ($name in @('browser', 'chrome', 'computer-use')) {
 }
 Put (Join-Path $market 'plugins\browser\scripts\browser-client.mjs') 'browser'
 Put (Join-Path $market 'plugins\computer-use\skills\computer-use\SKILL.md') 'skill'
+Add-ChromeFixture $fixture
 $target = Join-Path $suiteRoot "user's isolated home"
-$arguments = @{ PackageRoot = $fixture; TestRoot = $target; SkipProcessCheck = $true }
+$arguments = @{ PackageRoot = $fixture; TestRoot = $target; SkipProcessCheck = $true; InitializeChrome = $true; InitializationSeconds = 0 }
 $paths = Get-RepairPaths $target ''
 $configPath = Join-Path $paths.CodexHome 'config.toml'
 $statePath = Join-Path $paths.StateRoot 'state.json'
@@ -36,7 +38,7 @@ Assert ($result.Status -eq 'NeedsRepair') 'Fresh check identifies missing compon
 Assert (-not (Test-Path -LiteralPath $configPath) -and -not (Test-Path -LiteralPath (Join-Path $paths.LocalRoot 'runtimes'))) 'Check-only does not write runtime or configuration'
 $result = Invoke-CodexRepair -Mode Auto @arguments
 Assert ($result.Status -eq 'Repaired') 'Fresh on-demand repair succeeds in an apostrophe path'
-Assert ($result.Changed.Count -eq 6 -and $script:NodeCalls -eq 1) 'Restores all five trees and configuration, then tests Node'
+Assert ($result.Changed.Count -eq 7 -and $script:NodeCalls -eq 1) 'Restores all five trees, configuration and Chrome integration, then tests Node'
 $before = Read-Text $configPath
 $backupCount = Count-Backups
 $result = Invoke-CodexRepair -Mode Auto @arguments
@@ -81,7 +83,7 @@ Assert ($result.Status -eq 'Repaired' -and $result.Changed.Count -eq 1) 'A missi
 $oldHash = $result.RuntimeHash
 Put (Join-Path $market 'plugins\chrome\asset.txt') 'new plugin content, same version'
 $result = Invoke-CodexRepair -Mode Auto @arguments
-Assert ($result.Status -eq 'Repaired' -and $result.RuntimeHash -eq $oldHash -and $result.Changed.Count -eq 2) 'Plugin resource updates repair marketplace/cache without replacing unchanged runtime'
+Assert ($result.Status -eq 'Repaired' -and $result.RuntimeHash -eq $oldHash -and $result.Changed.Count -eq 3) 'Plugin resource updates repair marketplace/cache without replacing unchanged runtime'
 Put (Join-Path $runtime 'manifest.json') 'new runtime manifest'
 $result = Invoke-CodexRepair -Mode Auto @arguments
 Assert ($result.Status -eq 'Repaired' -and $result.RuntimeHash -ne $oldHash) 'A runtime update dynamically selects a new hash directory'

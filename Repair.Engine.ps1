@@ -1,6 +1,7 @@
 #Requires -Version 5.1
 # Functions only. Loading this file never repairs anything.
 . (Join-Path $PSScriptRoot 'Repair.Core.ps1')
+. (Join-Path $PSScriptRoot 'Repair.Chrome.ps1')
 
 function Get-ConfigSection {
     param([string]$Content, [string]$Section)
@@ -50,7 +51,7 @@ function Get-RepairPaths {
     }
     Assert-NoReparsePath $configHome
     Assert-NoReparsePath $localRoot
-    return [pscustomobject]@{ CodexHome = $configHome; LocalRoot = $localRoot; StateRoot = (Join-Path $localRoot 'computer-use-repair') }
+    return [pscustomobject]@{ CodexHome = $configHome; LocalRoot = $localRoot; StateRoot = (Join-Path $localRoot 'computer-use-repair'); Isolated = [bool]$TestRoot }
 }
 
 function Get-LimitedProcessImagePath {
@@ -89,13 +90,16 @@ namespace CodexRepair {
 function Get-RepairProcesses {
     param([string]$RuntimeParent)
     $runtimePrefix = (Get-FullPath $RuntimeParent).TrimEnd('\') + '\'
-    foreach ($process in @(Get-Process -Name 'Codex', 'ChatGPT', 'node_repl', 'codex-computer-use', 'node' -ErrorAction SilentlyContinue)) {
+    $viewPrefix = (Join-Path (Split-Path -Parent (Split-Path -Parent $runtimePrefix.TrimEnd('\'))) 'computer-use-repair\chrome-resources') + '\'
+    foreach ($process in @(Get-Process -Name 'Codex', 'ChatGPT', 'node_repl', 'codex-computer-use', 'node', 'extension-host' -ErrorAction SilentlyContinue)) {
         try { $path = $process.Path } catch { $path = $null }
         if (-not $path) {
             try { $path = Get-LimitedProcessImagePath $process.Id } catch { $path = $null }
         }
         if ($process.ProcessName -eq 'node' -and $path -and
-            -not $path.StartsWith($runtimePrefix, [StringComparison]::OrdinalIgnoreCase)) { continue }
+            -not $path.StartsWith($runtimePrefix, [StringComparison]::OrdinalIgnoreCase) -and
+            -not $path.StartsWith($viewPrefix, [StringComparison]::OrdinalIgnoreCase)) { continue }
+        if ($process.ProcessName -eq 'extension-host' -and $path -and $path -notmatch '[\\/]plugins[\\/].*[\\/]chrome[\\/]' -and -not $path.StartsWith($viewPrefix, [StringComparison]::OrdinalIgnoreCase)) { continue }
         $reason = if ($path) { 'Codex app or Computer Use runtime' } else { 'Image path unavailable; cannot safely rule out runtime use' }
         [pscustomobject]@{ Id = $process.Id; ProcessName = $process.ProcessName; Path = $path; Reason = $reason }
     }
@@ -254,12 +258,14 @@ function Invoke-CodexRepair {
     param(
         [ValidateSet('Manual', 'Auto', 'Check')][string]$Mode = 'Manual',
         [string]$PackageRoot = '', [string]$TestRoot = '', [string]$CodexHomePath = '',
-        [switch]$SkipProcessCheck, [switch]$FullCheck,
+        [switch]$SkipProcessCheck, [switch]$FullCheck, [switch]$InitializeChrome, [string]$RestoreChromeBackup = '',
+        [ValidateRange(0, 300)][int]$InitializationSeconds = 120,
         [ValidateRange(0, 300)][int]$WaitSeconds = 0
     )
     $ErrorActionPreference = 'Stop'
     if (($PackageRoot -or $SkipProcessCheck) -and -not $TestRoot) { throw '-PackageRoot and -SkipProcessCheck require an isolated -TestRoot.' }
     if ($TestRoot -and $CodexHomePath) { throw '-TestRoot cannot be combined with -CodexHomePath.' }
+    if ($RestoreChromeBackup -and ($Mode -ne 'Manual' -or $InitializeChrome)) { throw 'Chrome rollback requires Manual mode without -InitializeChrome.' }
     $paths = Get-RepairPaths $TestRoot $CodexHomePath
     Assert-NoReparsePath $paths.StateRoot
     New-Item -ItemType Directory -Path $paths.StateRoot -Force | Out-Null
@@ -274,7 +280,7 @@ function Invoke-CodexRepair {
     $statePath = Join-Path $paths.StateRoot 'state.json'
     $reportPath = Join-Path $paths.StateRoot 'last-result.json'
     $script:RepairBackups = [Collections.Generic.List[string]]::new()
-    $report = [ordered]@{ Status = 'Checking'; ExitCode = 1; CheckedAt = [DateTime]::UtcNow.ToString('o'); Package = ''; PackageVersion = ''; RuntimeHash = ''; Fingerprint = ''; Changed = @(); Backups = @(); BlockingProcesses = @(); Message = ''; Log = '' }
+    $report = [ordered]@{ Status = 'Checking'; ExitCode = 1; CheckedAt = [DateTime]::UtcNow.ToString('o'); Package = ''; PackageVersion = ''; RuntimeHash = ''; Fingerprint = ''; Changed = @(); Backups = @(); BlockingProcesses = @(); ChromeIntegration = $null; Message = ''; Log = '' }
     $state = $null
     $attempted = $false
     try {
@@ -324,6 +330,17 @@ function Invoke-CodexRepair {
             catch { $script:FullHashCheck = $true }
         }
         $plan = Get-RepairPlan $package $paths
+        $chromePlan = Get-ChromeIntegrationPlan $package $paths $plan
+        if ($Mode -ne 'Check') { Assert-ChromeWriteTargets $chromePlan }
+        if ($RestoreChromeBackup) {
+            & $script:RepairGuard
+            Restore-ChromeIntegration $chromePlan $RestoreChromeBackup
+            $report.ChromeIntegration = Test-ChromeNativeMessaging $chromePlan
+            $report.Status = 'Restored'; $report.ExitCode = 0
+            $report.Changed = @('Chrome integration rollback')
+            $report.Message = 'Saved Chrome registration and metadata restored. Run check-only to inspect resource health.'
+            return [pscustomobject]$report
+        }
         $report.RuntimeHash = $plan.RuntimeHash
         $fingerprint = Get-ResourceFingerprint $package $plan.Trees
         $report.Fingerprint = $fingerprint
@@ -334,17 +351,21 @@ function Invoke-CodexRepair {
         if ($Mode -eq 'Auto' -and $state.Interrupted) { throw 'PAUSED: Previous repair was interrupted. Review logs/backups and run the manual repair once.' }
         $damaged = @()
         foreach ($tree in $plan.Trees) {
+            if ($tree.Label -eq 'OpenAI bundled marketplace' -and (Test-ChromeMarketplaceResources $chromePlan)) { continue }
             if (-not (Test-TreeMatches $tree.Source $tree.Target $tree.Keys)) { $damaged += $tree }
         }
         $configHealthy = Test-CodexConfig $paths.CodexHome $plan.Marketplace
-        if (-not $damaged.Count -and $configHealthy -and -not $state.FailureCount -and -not $state.Interrupted -and $Mode -ne 'Manual') {
-            $report.Status = 'Healthy'; $report.ExitCode = 0; $report.Message = 'All required runtime and plugin files are healthy; no repair needed.'
+        $report.ChromeIntegration = Test-ChromeNativeMessaging $chromePlan
+        $chromeHealthy = $report.ChromeIntegration.Status -eq 'Healthy'
+        if (-not $damaged.Count -and $configHealthy -and $chromeHealthy -and -not $state.FailureCount -and -not $state.Interrupted) {
+            $report.Status = 'Healthy'; $report.ExitCode = 0; $report.Message = 'Resource integrity and Chrome desktop integration are healthy; no repair needed. Browser handshake is not tested.'
             $state.FailureCount = 0; $state.NextRetry = ''; $state.Interrupted = $false
         }
         elseif ($Mode -eq 'Check') {
             $report.Status = 'NeedsRepair'; $report.ExitCode = 2; $report.Message = 'Missing, changed, or unconfigured components detected. Check mode did not modify Codex.'
             $report.Changed = @($damaged | ForEach-Object { $_.Label })
             if (-not $configHealthy) { $report.Changed += 'Plugin configuration' }
+            if (-not $chromeHealthy) { $report.Changed += @($report.ChromeIntegration.Issues); foreach ($issue in $report.ChromeIntegration.Issues) { Write-Host "NeedsRepair: $issue" } }
         }
         else {
             if ($Mode -eq 'Auto' -and $state.FailureCount -ge 3) { throw 'PAUSED: Three automatic repair attempts failed for these resources. Review diagnostics and run the manual repair.' }
@@ -364,12 +385,16 @@ function Invoke-CodexRepair {
             }
             # Verify executable health before changing user configuration.
             $nodeVersion = Test-RestoredNode $plan.Runtime
-            if (-not $configHealthy -or $Mode -eq 'Manual') {
-                Update-CodexConfig -CodexHome $paths.CodexHome -MarketplacePath $plan.Marketplace -Timestamp $timestamp -PreservePluginPreferences:($Mode -eq 'Auto')
+            if (-not $configHealthy) {
+                Update-CodexConfig -CodexHome $paths.CodexHome -MarketplacePath $plan.Marketplace -Timestamp $timestamp -PreservePluginPreferences
                 $report.Changed += 'Plugin configuration'
             }
             & $script:RepairGuard
             if (-not (Test-CodexConfig $paths.CodexHome $plan.Marketplace)) { throw 'Configuration verification failed.' }
+            if (-not $chromeHealthy) {
+                $report.Changed += 'Chrome desktop integration'
+                $report.ChromeIntegration = Repair-ChromeNativeMessaging $chromePlan $plan $timestamp -InitializeChrome:$InitializeChrome -InitializationSeconds $InitializationSeconds
+            }
             $state.FailureCount = 0; $state.NextRetry = ''; $state.Interrupted = $false
             $report.Status = 'Repaired'; $report.ExitCode = 0; $report.Message = "Repair completed successfully. Node runtime: $nodeVersion"
         }
@@ -379,6 +404,9 @@ function Invoke-CodexRepair {
     }
     catch {
         $report.Message = $_.Exception.Message
+        if (Get-Variable chromePlan -ErrorAction SilentlyContinue) {
+            try { $report.ChromeIntegration = Test-ChromeNativeMessaging $chromePlan } catch { }
+        }
         if ($report.Message -like 'DEFERRED:*') { $report.Status = 'Deferred'; $report.ExitCode = 10 }
         elseif ($report.Message -like 'COOLDOWN:*') { $report.Status = 'Cooldown'; $report.ExitCode = 11 }
         elseif ($report.Message -like 'PAUSED:*') { $report.Status = 'Paused'; $report.ExitCode = 12 }

@@ -3,6 +3,7 @@
 param(
     [switch]$CheckOnly,
     [switch]$FullCheck,
+    [switch]$InitializeChrome,
     [string]$PackageRoot = '',
     [string]$TestRoot = '',
     [switch]$SkipProcessCheck,
@@ -15,7 +16,7 @@ $result = Invoke-CodexRepair -Mode Check -PackageRoot $PackageRoot -TestRoot $Te
 if ($result.ExitCode -ne 2 -or $CheckOnly) { exit $result.ExitCode }
 
 Write-Host 'Repair is needed. Starting the repair script...'
-$repairArguments = @{ Auto = $true; PackageRoot = $PackageRoot; TestRoot = $TestRoot; SkipProcessCheck = $SkipProcessCheck; WaitSeconds = $WaitSeconds }
+$repairArguments = @{ Auto = $true; PackageRoot = $PackageRoot; TestRoot = $TestRoot; SkipProcessCheck = $SkipProcessCheck; WaitSeconds = $WaitSeconds; InitializeChrome = $InitializeChrome }
 # The repair script acquires the same lock and rechecks current resources/processes.
 # It is called only on damage; it never invokes this checker or the CMD launcher.
 & (Join-Path $PSScriptRoot 'repair-codex-computer-use.ps1') @repairArguments

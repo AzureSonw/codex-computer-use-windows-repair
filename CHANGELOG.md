@@ -2,6 +2,27 @@
 
 All notable changes to this project are documented here.
 
+## [1.3.0] - 2026-10-03
+
+### Added
+
+- Chrome desktop integration checks: trusted Native Messaging manifest/bridge/origins, current-user HKCU registration, versioned `latest` junction, both v2 resource registrations, and bundled marketplace initialization metadata.
+- A separate `Repair.Chrome.ps1` stage prepares a hash-verified decrypted resource view and, with `-InitializeChrome`, lets the official desktop application generate registration and feature-dependent marketplace metadata. The existing CMD enables this one-time initialization when needed.
+- `ChromeIntegration` diagnostics, integration snapshots, automatic rollback after initializer failure when process guards permit, and explicit `-RestoreChromeBackup` recovery.
+- Isolated Chrome fault/rollback tests and installed-package discovery/resource-view validation that never initializes live Chrome registration.
+
+### Fixed
+
+- Healthy runtime/plugin trees no longer hide incomplete Chrome registration after WindowsApps copying interrupted marketplace initialization. This is one cause of an installed extension incorrectly requesting the desktop app.
+- Healthy manual runs preserve files/configuration just like automatic runs. Registration-only repairs leave healthy resource trees in place, and both entry points preserve disabled-plugin preferences.
+
+### Safety
+
+- Preserve trusted Store package discovery, decrypted stream copying, staging/hash checks, backups, process guards and PowerShell 5.1/7 compatibility. No package/plugin version or extension ID is hard-coded.
+- Back up existing integration files, HKCU default value/key existence and latest target before invoking desktop initialization. Tool registry writes are limited to restoring that exact HKCU value; no HKLM writes or direct registration synthesis.
+- Recognize initialization contracts from the trusted installed application and fail closed on unsupported layouts/content variants. The environment override is process-local. No startup task, scheduled task, background repair service, downloads or redistributed OpenAI binaries.
+- Initialization timeout or inability to validate returns `Deferred`; local `Healthy` does not claim a successful browser handshake. Real desktop initialization/Chrome handshake must still be checked through the repair entry point.
+
 ## [1.2.1] - 2026-09-12
 
 ### Fixed
