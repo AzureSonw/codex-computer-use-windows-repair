@@ -18,9 +18,17 @@ function Test-CodexConfig {
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { return $false }
     $content = [IO.File]::ReadAllText($path)
     $section = Get-ConfigSection $content 'marketplaces.openai-bundled'
-    $escaped = $MarketplacePath.Replace('\', '\\').Replace('"', '\"')
+    if (-not (Test-Path -LiteralPath $MarketplacePath -PathType Container)) { return $false }
+    $source = Get-MarketplaceSourcePath $MarketplacePath
+    $escaped = $source.Replace('\', '\\').Replace('"', '\"')
+    # The desktop rewrites TOML basic strings as literal strings when possible,
+    # using triple quotes for paths with apostrophes. Accept each exact encoding,
+    # but not the old noncanonical source value.
+    $values = @([regex]::Escape('"' + $escaped + '"'))
+    if (-not $source.Contains("'")) { $values += [regex]::Escape("'" + $source + "'") }
+    if (-not $source.Contains("'''")) { $values += [regex]::Escape("'''" + $source + "'''") }
     if ($section -notmatch '(?m)^source_type\s*=\s*"local"\s*(?:#.*)?$' -or
-        $section -notmatch ('(?m)^source\s*=\s*"' + [regex]::Escape($escaped) + '"\s*(?:#.*)?$')) { return $false }
+        $section -cnotmatch ('(?m)^source[ \t]*=[ \t]*(?:' + ($values -join '|') + ')[ \t]*(?:#[^\r\n]*)?\r?$')) { return $false }
     foreach ($name in @('browser', 'chrome', 'computer-use')) {
         $section = Get-ConfigSection $content ('plugins."' + $name + '@openai-bundled"')
         # An explicit false is a user preference, not damage.

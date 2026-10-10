@@ -2,6 +2,19 @@
 
 All notable changes to this project are documented here.
 
+## [1.3.1] - 2026-10-10
+
+### Fixed
+
+- Fixed a real v1.3.0 initialization blocker on Codex `26.1007.2314.0`: the repair wrote a plain Windows marketplace path, while the app server compares it against its canonical `\\?\C:\...` source. The same directory was rejected as "already added from a different source", leaving Chrome registration missing until timeout.
+- Obtain the canonical source from a Windows directory handle, preserving filesystem casing and long names. Migrate the old configuration with an exact backup and retain disabled-plugin choices and unrelated settings.
+- Accept the app server's basic, literal and single-line triple-literal TOML encodings, including paths containing apostrophes. A valid desktop rewrite no longer triggers repeated configuration repair.
+
+### Verified
+
+- Added `tests/Test-Marketplace.ps1`, which starts the trusted installed app server with isolated homes. It reproduces the old source conflict, applies the real configuration repair, and verifies two successful registrations and checker acceptance, including spaces, apostrophes and case aliases.
+- Live desktop initialization and Chrome extension connectivity still require running the repair after closing Codex. Successful marketplace registration alone is not a successful Chrome handshake.
+
 ## [1.3.0] - 2026-10-03
 
 ### Added

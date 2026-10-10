@@ -4,7 +4,7 @@
 
 This unofficial Windows workaround restores `cua_node` and the bundled Browser, Chrome, and Computer Use plugins from the healthy Microsoft Store Codex package already installed on the same machine. It never downloads or redistributes OpenAI binaries.
 
-**v1.3.0 checks resources and Chrome desktop integration.** Extract the release ZIP and double-click `Run-Codex-Computer-Use-Repair.cmd`. The launcher checks the trusted installed package, runtime, plugins, configuration, marketplace initialization, Chrome Native Messaging manifest/HKCU registration, bridge, `latest` junction and both v2 resource registrations. Missing registration can no longer be reported as healthy. Healthy runs preserve resources, integration files, configuration and backups; diagnostic logs/check state still update.
+**v1.3.1 checks resources and Chrome desktop integration, and fixes marketplace source conflicts.** Extract the release ZIP and double-click `Run-Codex-Computer-Use-Repair.cmd`. The launcher checks the trusted installed package, runtime, plugins, configuration, marketplace initialization, Chrome Native Messaging manifest/HKCU registration, bridge, `latest` junction and both v2 resource registrations. Missing registration can no longer be reported as healthy. Healthy runs preserve resources, integration files, configuration and backups; diagnostic logs/check state still update.
 
 Checks run **only when you run the CMD file**. There are no startup entries, scheduled tasks, background services or periodic checks. If repair is needed, fully quit ChatGPT/Codex from the tray; the CMD waits up to 120 seconds. For incomplete Chrome integration, it prepares a verified decrypted resource view and opens the trusted desktop app once to run its own initialization. It waits up to another 120 seconds for valid registration. A timeout returns `Deferred`, never success. Unrelated Stream Deck/Node processes remain excluded; no user process is killed.
 
@@ -12,7 +12,7 @@ This addresses a diagnosed WindowsApps copy failure: the extension and desktop a
 
 ## 用法：双击 CMD，先检查，有问题才修复
 
-1. 从 [Releases](https://github.com/AzureSonw/codex-computer-use-windows-repair/releases) 下载 `Codex-Computer-Use-Repair-v1.3.0.zip`；若尚未发布该版本，可从源码运行下方打包命令。
+1. 从 [Releases](https://github.com/AzureSonw/codex-computer-use-windows-repair/releases) 下载 `Codex-Computer-Use-Repair-v1.3.1.zip`；若尚未发布该版本，可从源码运行下方打包命令。
 2. 解压到普通文件夹；不要在 ZIP 预览窗口中运行。
 3. 双击 `Run-Codex-Computer-Use-Repair.cmd`。
 4. 看到 `Healthy` 表示资源与本地 Chrome 集成状态有效；`Repaired` 表示本次修复后校验通过。仍需在 Chrome 扩展中实际测试连接。
@@ -25,6 +25,8 @@ This addresses a diagnosed WindowsApps copy failure: the extension and desktop a
 只在你运行 CMD 时检查。**没有开机检查、周期检查、计划任务或常驻修复服务。** 本次 CMD 仅在 Chrome 集成需要修复时启动一次官方 Codex，使用仅对子进程有效的资源路径变量，不设置永久环境变量。超时返回 `Deferred` 并保留备份；不会强制关闭应用。不再需要时可删除工具文件夹，已修复的资源和备份仍会保留。
 
 **扩展一直提示下载桌面端？** 当 WindowsApps 普通文件复制失败时，资源可能部分恢复，但 marketplace 初始化标记、`latest`、v2 注册和 Native Messaging 尚未生成。v1.3.0 会检查这些缺失项。它先用解密字节流及 SHA-256 准备官方资源视图，再交给官方应用初始化，不猜测账号相关的 marketplace 标记，也不伪造在线进程信息。此问题以外的连接故障仍需单独诊断。
+
+**v1.3.0 复制完成后仍等待 120 秒并返回 `Deferred`？** 已在 Codex `26.1007.2314.0` 复现一种工具自身的配置问题：普通 `C:\...` 路径与官方注册使用的 `\\?\C:\...` 路径被判为不同来源，桌面日志报告 `already added from a different source`。v1.3.1 从文件系统读取规范路径，备份并迁移旧配置，同时识别官方重写后的 TOML 引号格式。更新工具后重新运行 CMD，按提示完全退出 Codex。此修正已通过真实 app-server 接口的隔离测试；仍需实际桌面初始化和扩展连接验证。
 
 > [!WARNING]
 > 这是社区临时解决方案，不是 OpenAI 官方修复。需要修复时会修改当前用户的 Codex 运行时、相关插件缓存及必要的 `config.toml` 条目。只支持 Windows 上通过 Microsoft Store/MSIX 安装的 Codex。
@@ -136,6 +138,7 @@ tests/Test-Chrome.ps1              # 隔离 Chrome 故障和回滚测试
 tests/Test-Repair.ps1              # 不依赖 Pester 的隔离行为测试
 tests/Test-Processes.ps1           # Stream Deck 误判和进程识别回归测试
 tests/Test-InstalledPackage.ps1     # 本机官方包的隔离端到端验证
+tests/Test-Marketplace.ps1          # 真实 app-server 的来源冲突及配置迁移回归测试
 tools/New-ReleasePackage.ps1       # Release ZIP 和 SHA-256
 ```
 
@@ -148,6 +151,13 @@ powershell.exe -NoLogo -NoProfile -File .\tests\Test-Processes.ps1
 pwsh.exe -NoLogo -NoProfile -File .\tests\Test-Processes.ps1
 powershell.exe -NoLogo -NoProfile -File .\tests\Test-Chrome.ps1
 pwsh.exe -NoLogo -NoProfile -File .\tests\Test-Chrome.ps1
+```
+
+用当前安装的官方 app-server 复现来源冲突并验证迁移。只使用新建的隔离配置和空 marketplace，不启动桌面应用、不访问真实账号配置或写入 Chrome 注册：
+
+```powershell
+powershell.exe -NoLogo -NoProfile -File .\tests\Test-Marketplace.ps1
+pwsh.exe -NoLogo -NoProfile -File .\tests\Test-Marketplace.ps1
 ```
 
 用本机官方包验证完整检查 → 隔离资源恢复/解密视图 → 重复检查流程；所有恢复文件写入仓库的 `work/`。此测试不启动桌面端、不修改真实 Chrome 注册或 Codex 配置，因此 Chrome 初始化应明确保持 `Deferred`：
@@ -176,7 +186,7 @@ powershell.exe -NoLogo -NoProfile -File .\tools\New-ReleasePackage.ps1
 下载后可以核对校验值：
 
 ```powershell
-(Get-FileHash .\Codex-Computer-Use-Repair-v1.3.0.zip -Algorithm SHA256).Hash
+(Get-FileHash .\Codex-Computer-Use-Repair-v1.3.1.zip -Algorithm SHA256).Hash
 ```
 
 ## License and disclaimer
