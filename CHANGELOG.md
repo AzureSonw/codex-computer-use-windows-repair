@@ -13,7 +13,9 @@ All notable changes to this project are documented here.
 ### Verified
 
 - Added `tests/Test-Marketplace.ps1`, which starts the trusted installed app server with isolated homes. It reproduces the old source conflict, applies the real configuration repair, and verifies two successful registrations and checker acceptance, including spaces, apostrophes and case aliases.
-- Live desktop initialization and Chrome extension connectivity still require running the repair after closing Codex. Successful marketplace registration alone is not a successful Chrome handshake.
+- On 2026-10-10, the repaired machine running Codex `26.1007.2314.0` completed desktop marketplace reconciliation. Independent checks passed for configuration, the Native Messaging manifest/HKCU value, the current `latest` junction and both v2 resource registrations. The connected Chrome extension then opened a page and returned its visible content successfully.
+- Computer Use application enumeration, accessibility text and screenshots worked. A file-selection click did not produce a verified selection change, so desktop input remains unconfirmed. These observations do not establish compatibility across other machines or releases.
+- The repair process exited before finalizing its report; its persisted state still indicated an interrupted run. The successful live checks were performed separately and do not imply that interrupted-state recovery was verified.
 
 ## [1.3.0] - 2026-10-03
 
