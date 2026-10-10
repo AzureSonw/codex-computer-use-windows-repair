@@ -5,12 +5,13 @@ echo Checking the installed Codex version and Computer Use files first.
 echo Healthy installations will be left as they are. Repair runs only when needed.
 echo If repair is needed, keep this window open and fully quit ChatGPT/Codex.
 echo This run can wait up to 120 seconds for the displayed blocking processes.
+echo If Chrome integration needs repair, the trusted Codex app will then open once.
 echo.
 where pwsh.exe >nul 2>&1
 if errorlevel 1 (
-  powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%~dp0check-codex-computer-use.ps1" -WaitSeconds 120
+  powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%~dp0check-codex-computer-use.ps1" -WaitSeconds 120 -InitializeChrome
 ) else (
-  pwsh.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%~dp0check-codex-computer-use.ps1" -WaitSeconds 120
+  pwsh.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%~dp0check-codex-computer-use.ps1" -WaitSeconds 120 -InitializeChrome
 )
 set "repair_exit_code=%ERRORLEVEL%"
 echo.

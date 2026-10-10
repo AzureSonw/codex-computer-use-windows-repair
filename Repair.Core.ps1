@@ -394,6 +394,51 @@ function Remove-ManagedTomlSections {
     return ($result -join "`r`n")
 }
 
+function Get-MarketplaceSourcePath {
+    param([string]$MarketplacePath)
+    # Rust canonicalize() in marketplace/add stores the final Windows path,
+    # including its extended-length prefix. A plain C:\ path conflicts even
+    # when it refers to the same directory. Query the filesystem for exact case
+    # and long names rather than guessing by prepending a prefix.
+    Assert-NoReparsePath $MarketplacePath
+    if (-not (Test-Path -LiteralPath $MarketplacePath -PathType Container)) { throw 'Marketplace directory must exist before registering its source.' }
+    if (-not ('CodexRepair.FinalDirectoryPath' -as [type])) {
+        Add-Type -TypeDefinition @'
+using System;
+using System.ComponentModel;
+using System.Runtime.InteropServices;
+using System.Text;
+using Microsoft.Win32.SafeHandles;
+namespace CodexRepair {
+    public static class FinalDirectoryPath {
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        private static extern SafeFileHandle CreateFileW(string path, uint access, uint share,
+            IntPtr security, uint disposition, uint flags, IntPtr template);
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        private static extern uint GetFinalPathNameByHandleW(SafeFileHandle handle,
+            StringBuilder path, uint size, uint flags);
+        public static string Get(string path) {
+            using (var handle = CreateFileW(path, 0, 7, IntPtr.Zero, 3, 0x02000000, IntPtr.Zero)) {
+                if (handle.IsInvalid) throw new Win32Exception(Marshal.GetLastWin32Error());
+                var buffer = new StringBuilder(512);
+                uint length = GetFinalPathNameByHandleW(handle, buffer, (uint)buffer.Capacity, 0);
+                if (length == 0) throw new Win32Exception(Marshal.GetLastWin32Error());
+                if (length >= buffer.Capacity) {
+                    buffer = new StringBuilder(checked((int)length + 1));
+                    length = GetFinalPathNameByHandleW(handle, buffer, (uint)buffer.Capacity, 0);
+                    if (length == 0) throw new Win32Exception(Marshal.GetLastWin32Error());
+                    if (length >= buffer.Capacity) throw new InvalidOperationException("Final path changed while reading.");
+                }
+                return buffer.ToString();
+            }
+        }
+    }
+}
+'@
+    }
+    return [CodexRepair.FinalDirectoryPath]::Get((Get-FullPath $MarketplacePath))
+}
+
 function Update-CodexConfig {
     param(
         [string]$CodexHome,
@@ -429,7 +474,7 @@ function Update-CodexConfig {
     $original = $content
     if ($PreservePluginPreferences) { $managedSections = @('marketplaces.openai-bundled') }
     $content = Remove-ManagedTomlSections -Content $content -SectionNames $managedSections
-    $marketplaceToml = $MarketplacePath.Replace('\', '\\').Replace('"', '\"')
+    $marketplaceToml = (Get-MarketplaceSourcePath $MarketplacePath).Replace('\', '\\').Replace('"', '\"')
     $updated = @(
         $content,
         '',

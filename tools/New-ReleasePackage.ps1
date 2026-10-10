@@ -29,6 +29,7 @@ $requiredFiles = @(
     'check-codex-computer-use.ps1',
     'Repair.Core.ps1',
     'Repair.Engine.ps1',
+    'Repair.Chrome.ps1',
     'Run-Codex-Computer-Use-Repair.cmd',
     'README.md',
     'VERSION',

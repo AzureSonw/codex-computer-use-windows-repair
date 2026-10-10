@@ -2,6 +2,42 @@
 
 All notable changes to this project are documented here.
 
+## [1.3.1] - 2026-10-10
+
+### Fixed
+
+- Fixed a real v1.3.0 initialization blocker on Codex `26.1007.2314.0`: the repair wrote a plain Windows marketplace path, while the app server compares it against its canonical `\\?\C:\...` source. The same directory was rejected as "already added from a different source", leaving Chrome registration missing until timeout.
+- Obtain the canonical source from a Windows directory handle, preserving filesystem casing and long names. Migrate the old configuration with an exact backup and retain disabled-plugin choices and unrelated settings.
+- Accept the app server's basic, literal and single-line triple-literal TOML encodings, including paths containing apostrophes. A valid desktop rewrite no longer triggers repeated configuration repair.
+
+### Verified
+
+- Added `tests/Test-Marketplace.ps1`, which starts the trusted installed app server with isolated homes. It reproduces the old source conflict, applies the real configuration repair, and verifies two successful registrations and checker acceptance, including spaces, apostrophes and case aliases.
+- On 2026-10-10, the repaired machine running Codex `26.1007.2314.0` completed desktop marketplace reconciliation. Independent checks passed for configuration, the Native Messaging manifest/HKCU value, the current `latest` junction and both v2 resource registrations. The connected Chrome extension then opened a page and returned its visible content successfully.
+- Computer Use application enumeration, accessibility text and screenshots worked. A file-selection click did not produce a verified selection change, so desktop input remains unconfirmed. These observations do not establish compatibility across other machines or releases.
+- The repair process exited before finalizing its report; its persisted state still indicated an interrupted run. The successful live checks were performed separately and do not imply that interrupted-state recovery was verified.
+
+## [1.3.0] - 2026-10-03
+
+### Added
+
+- Chrome desktop integration checks: trusted Native Messaging manifest/bridge/origins, current-user HKCU registration, versioned `latest` junction, both v2 resource registrations, and bundled marketplace initialization metadata.
+- A separate `Repair.Chrome.ps1` stage prepares a hash-verified decrypted resource view and, with `-InitializeChrome`, lets the official desktop application generate registration and feature-dependent marketplace metadata. The existing CMD enables this one-time initialization when needed.
+- `ChromeIntegration` diagnostics, integration snapshots, automatic rollback after initializer failure when process guards permit, and explicit `-RestoreChromeBackup` recovery.
+- Isolated Chrome fault/rollback tests and installed-package discovery/resource-view validation that never initializes live Chrome registration.
+
+### Fixed
+
+- Healthy runtime/plugin trees no longer hide incomplete Chrome registration after WindowsApps copying interrupted marketplace initialization. This is one cause of an installed extension incorrectly requesting the desktop app.
+- Healthy manual runs preserve files/configuration just like automatic runs. Registration-only repairs leave healthy resource trees in place, and both entry points preserve disabled-plugin preferences.
+
+### Safety
+
+- Preserve trusted Store package discovery, decrypted stream copying, staging/hash checks, backups, process guards and PowerShell 5.1/7 compatibility. No package/plugin version or extension ID is hard-coded.
+- Back up existing integration files, HKCU default value/key existence and latest target before invoking desktop initialization. Tool registry writes are limited to restoring that exact HKCU value; no HKLM writes or direct registration synthesis.
+- Recognize initialization contracts from the trusted installed application and fail closed on unsupported layouts/content variants. The environment override is process-local. No startup task, scheduled task, background repair service, downloads or redistributed OpenAI binaries.
+- Initialization timeout or inability to validate returns `Deferred`; local `Healthy` does not claim a successful browser handshake. Real desktop initialization/Chrome handshake must still be checked through the repair entry point.
+
 ## [1.2.1] - 2026-09-12
 
 ### Fixed
